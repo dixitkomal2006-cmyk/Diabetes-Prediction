@@ -1,76 +1,54 @@
 import streamlit as st
-import pandas as pd
+import numpy as np
+from sklearn.datasets import load_diabetes
 from sklearn.model_selection import train_test_split
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.naive_bayes import MultinomialNB
-from sklearn.metrics import accuracy_score, confusion_matrix
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_squared_error, r2_score
+import pandas as pd
 
-st.title("🎬 IMDB Sentiment Analysis")
+st.title("🩺 Diabetes Progression Prediction")
 
-# ---------------- Upload CSV ----------------
-uploaded_file = st.file_uploader("Upload IMDB Dataset CSV", type="csv")
+# ---------------- Load Dataset ----------------
+diabetes = load_diabetes()
 
-if uploaded_file is not None:
-    df = pd.read_csv(uploaded_file)
+X_train, X_test, y_train, y_test = train_test_split(
+    diabetes.data,
+    diabetes.target,
+    test_size=0.2,
+    random_state=42
+)
 
-    # Convert sentiment to numeric
-    df['sentiment'] = df['sentiment'].map({'positive': 1, 'negative': 0})
+# ---------------- Model ----------------
+model = LinearRegression()
+model.fit(X_train, y_train)
 
-    st.write("### Dataset Preview")
-    st.dataframe(df.head())
+y_pred = model.predict(X_test)
 
-    # ---------------- Train Test Split ----------------
-    X_train, X_test, y_train, y_test = train_test_split(
-        df['review'], df['sentiment'],
-        test_size=0.2,
-        random_state=42
-    )
+# ---------------- Metrics ----------------
+mse = mean_squared_error(y_test, y_pred)
+r2 = r2_score(y_test, y_pred)
 
-    # ---------------- TF-IDF ----------------
-    tfidf = TfidfVectorizer(stop_words='english', max_features=5000)
+st.write(f"### Mean Squared Error: **{mse:.2f}**")
+st.write(f"### R² Score: **{r2:.2f}**")
 
-    X_train_tfidf = tfidf.fit_transform(X_train)
-    X_test_tfidf = tfidf.transform(X_test)
+# ---------------- Create DataFrame for Graph ----------------
+results_df = pd.DataFrame({
+    "Actual Values": y_test,
+    "Predicted Values": y_pred
+})
 
-    # ---------------- Model ----------------
-    nb = MultinomialNB()
-    nb.fit(X_train_tfidf, y_train)
+st.subheader("Actual vs Predicted Values")
 
-    y_pred = nb.predict(X_test_tfidf)
+st.line_chart(results_df)
 
-    # ---------------- Accuracy ----------------
-    accuracy = accuracy_score(y_test, y_pred)
-    st.write(f"### Model Accuracy: **{accuracy:.4f}**")
+# ---------------- BMI Feature Analysis ----------------
+st.subheader("BMI Feature vs Target")
 
-    # ---------------- Confusion Matrix ----------------
-    st.subheader("Confusion Matrix")
+bmi_index = list(diabetes.feature_names).index("bmi")
 
-    cm = confusion_matrix(y_test, y_pred)
+bmi_df = pd.DataFrame({
+    "BMI": X_test[:, bmi_index],
+    "Predicted Progression": y_pred
+})
 
-    cm_df = pd.DataFrame(
-        cm,
-        columns=["Predicted Negative", "Predicted Positive"],
-        index=["Actual Negative", "Actual Positive"]
-    )
-
-    st.dataframe(cm_df)
-
-    # ---------------- Sentiment Distribution Graph ----------------
-    st.subheader("Sentiment Distribution")
-
-    sentiment_counts = df['sentiment'].value_counts()
-    st.bar_chart(sentiment_counts)
-
-    # ---------------- Test Review ----------------
-    st.subheader("Test a Review")
-
-    user_review = st.text_input("Enter a Review")
-
-    if user_review:
-        vec = tfidf.transform([user_review])
-        prediction = nb.predict(vec)[0]
-
-        if prediction == 1:
-            st.success("Sentiment: Positive 😊")
-        else:
-            st.error("Sentiment: Negative 😞")
+st.scatter_chart(bmi_df)
